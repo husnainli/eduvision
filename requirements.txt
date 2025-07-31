@@ -1,0 +1,37 @@
+# ===========================
+# 📦 Core App Libraries
+# ===========================
+streamlit
+chromadb
+PyMuPDF                  # For PDF text extraction
+deep-translator          # Optional backup for translations
+langdetect               # Detects input language (Arabic, English, etc.)
+python-dotenv            # Loads environment variables from .env
+
+# ===========================
+# 🔗 LangChain Ecosystem
+# ===========================
+langchain>=0.1.0         # Core LangChain logic
+langchain-community      # Required for FAISS and integration modules
+langchain-text-splitters # Used for chunking documents
+
+# ===========================
+# 📚 Vector Store & Embeddings
+# ===========================
+faiss-cpu                # ✅ FAISS: Fast vector similarity search (replacing Chroma)
+sentence-transformers    # Loads HuggingFace embedding models (e.g., multilingual-e5)
+
+# ===========================
+# 🤖 LLM Integration
+# ===========================
+openai                   # Used to query OpenAI or LLaMA3 (via Together API etc.)
+
+# ===========================
+# 🌍 Translation Support
+# ===========================
+googletrans==4.0.0-rc1   # Google Translate (via unofficial API)
+
+# ===========================
+# ⚙️ Compatibility Fixes
+# ===========================
+pydantic<2.0             # Required by some LangChain modules (pre-2.x)

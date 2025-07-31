@@ -1,9 +1,9 @@
 import streamlit as st
 import fitz  # PyMuPDF
 import re
-
-from utils.embeddings import chunk_text, embed_chunks, retrieve_similar_chunks
-from utils.llm import query_llama3
+import hashlib
+from utils.embeddings import chunk_text, embed_chunks, retrieve_from_all_vectorstores, find_most_similar_summary
+from utils.llm import query_llama3, summarize_text_arabic
 from utils.translate import translate_text
 
 # -------------------------------
@@ -22,6 +22,21 @@ def clean_arabic_text(text):
     return re.sub(r"\s+", ' ', text).strip()
 
 # -------------------------------
+# 🧠 Hashing for Caching
+# -------------------------------
+def compute_text_hash(text):
+    return hashlib.md5(text.encode('utf-8')).hexdigest()
+
+@st.cache_resource
+def get_cached_vectorstore(chunks, filename, text_hash):
+    return embed_chunks(chunks, filename=filename)
+
+@st.cache_data(show_spinner=False)
+def get_cached_summary(text, filename, text_hash):
+    short_text = text[:3000]
+    return summarize_text_arabic(short_text)
+
+# -------------------------------
 # 📄 PDF Text Extraction
 # -------------------------------
 def extract_text_from_pdf(pdf_file):
@@ -29,13 +44,6 @@ def extract_text_from_pdf(pdf_file):
     doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
     raw_text = ''.join(page.get_text() for page in doc)
     return clean_arabic_text(raw_text)
-
-def sanitize_for_translation(text):
-    return text.replace('\n', ' ').strip()
-
-@st.cache_resource(show_spinner=False)
-def get_vectorstore(chunks):
-    return embed_chunks(chunks)
 
 # -------------------------------
 # 🚀 Streamlit App Initialization
@@ -50,49 +58,60 @@ if "messages" not in st.session_state:
 # -------------------------------
 # 📤 PDF Upload
 # -------------------------------
-uploaded_file = st.file_uploader("📤 Upload an Arabic PDF", type=["pdf"])
+uploaded_files = st.file_uploader("📤 Upload Arabic PDFs", type=["pdf"], accept_multiple_files=True)
 
-if uploaded_file:
-    st.success("✅ PDF uploaded successfully!")
+vectorstores = []
 
-    # # ✅ Test translation call (for debug)
-    # with st.spinner("🌐 Testing translation function..."):
-    #     test_text = "محتوى الوثيقة هو سرد تاريخي عن الدولة السعودية، والذكرى لملك عبد العزيز بن عبد الرحمن الفيصل، والشخصية السعودية محمد بن سعود الملقب بالمغفور له."
-    #     translation_result = translate_text(test_text)
-    #     st.markdown("🔁 **Test Translation Result:**")
-    #     st.markdown(f"📘 Original Arabic: `{test_text}`")
-    #     st.markdown(f"📗 English Translation: `{translation_result}`")
+if uploaded_files:
+    summaries = []
 
-    # 🔍 Extract and clean text
-    with st.spinner("🧼 Extracting and cleaning text..."):
-        pdf_text = extract_text_from_pdf(uploaded_file)
+    for pdf_file in uploaded_files:
+        filename = pdf_file.name
+        st.success(f"✅ {filename} uploaded successfully!")
 
-    # with st.expander("📖 Preview Cleaned Text"):
-    #     st.text_area("First 2000 characters of cleaned text:", value=pdf_text[:2000], height=300)
+        # 🔍 Extract and clean text
+        with st.spinner(f"🧼 Extracting and cleaning text from {filename}..."):
+            pdf_text = extract_text_from_pdf(pdf_file)
 
-    # 🔄 Split into chunks
-    with st.spinner("🔄 Splitting text into chunks..."):
-        chunks = chunk_text(pdf_text)
-        # st.write(f"🔹 Total Chunks Created: {len(chunks)}")
+        # 🔄 Split into chunks
+        with st.spinner(f"🔄 Splitting {filename} into chunks..."):
+            chunks = chunk_text(pdf_text)
 
-    # 🧠 Generate and store embeddings
-    with st.spinner("🧠 Embedding text and storing in vector DB..."):
-        vectorstore = get_vectorstore(chunks)
-        # st.success("✅ Embeddings successfully stored!")
+        # 🧠 Hash PDF text to cache vector store
+        text_hash = compute_text_hash(pdf_text)
 
-    # # 🔍 Simulated retrieval preview
-    # with st.expander("🧠 Example Retrieval"):
-    #     sample_query = "ما هو موضوع الوثيقة؟"
-    #     st.write(f"🔍 Example Query: `{sample_query}`")
-    #     docs = vectorstore.similarity_search(sample_query, k=4)
-    #     for i, doc in enumerate(docs, 1):
-    #         st.markdown(f"**Document {i}:**\n{doc.page_content[:500]}")
+        # 🧠 Generate and cache embeddings
+        with st.spinner(f"🧠 Embedding text from {filename}..."):
+            vs = get_cached_vectorstore(chunks, filename, text_hash)
+            vectorstores.append((filename, vs))
+
+        # 📝 Generate summary of full text
+        with st.spinner(f"📚 Generating Arabic summary for {filename}..."):
+            summary = get_cached_summary(pdf_text, filename, text_hash)
+            summaries.append((filename, summary))
+
+        with st.container():
+            st.markdown(f"### 📝 ملخص الوثيقة: {filename}")
+            st.markdown(
+                f"""
+                <div style='background-color:#f9f9f9;
+                            border-left: 5px solid #4CAF50;
+                            padding: 1rem;
+                            border-radius: 10px;
+                            font-size: 1.1rem;
+                            direction: rtl;
+                            text-align: right;'>
+                    {summary}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
     # ---------------------------------
     # 💬 Interactive Q&A Chat Interface
     # ---------------------------------
     st.divider()
-    st.subheader("💬 Ask a question based on the uploaded PDF")
+    st.subheader("💬 Ask a question based on the uploaded PDFs")
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
@@ -108,34 +127,49 @@ if uploaded_file:
 
         # Retrieve relevant document chunks
         with st.spinner("🤖 Generating response using LLaMA 3..."):
-            retrieved_docs = retrieve_similar_chunks(vectorstore, user_input, k=6)
-            context = "\n\n".join(doc.page_content for doc in retrieved_docs)
-            # context = "\n\n".join(clean_arabic_text(doc.page_content) for doc in retrieved_docs)
+            retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
 
-            print(context)
+            context = "\n\n".join(
+                f"[من الملف: {doc.metadata.get('source', 'غير معروف')}]\n{doc.page_content}"
+                for doc in retrieved_docs
+            )
 
             prompt = (
                 f"السؤال:\n{user_input}\n\n"
-                f"محتوى الوثيقة:\n{context}\n\n"
-                "أجب إجابة كاملة وشاملة مستندًا فقط إلى محتوى الوثيقة أعلاه."
-                "يجب أن تكون إجابتك باللغة العربية الفصحى فقط دون أي كلمات إنجليزية أو لغات أخرى."
+                f"محتوى الوثائق:\n{context}\n\n"
+                "أجب إجابة كاملة وشاملة مستندًا فقط إلى محتوى الوثائق أعلاه.\n"
+                "يجب أن تكون إجابتك باللغة العربية الفصحى فقط دون أي كلمات إنجليزية أو لغات أخرى.\n"
                 "إذا لم يكن هناك معلومات كافية، قل ذلك بالعربية فقط دون تأليف."
             )
 
+
             response = query_llama3(prompt)
-            # response = query_jais(prompt)
 
-        response_key = f"translated_response_{len(st.session_state.messages)}"
+            # # ✅ Extract unique source filenames
+            # used_sources = set(doc.metadata.get("source", "غير معروف") for doc in retrieved_docs)
+            # sources_line = "🗂️ المراجع: [" + "، ".join(used_sources) + "]"
 
+            # from collections import Counter
+            # source_counter = Counter(doc.metadata.get("source", "غير معروف") for doc in retrieved_docs)
+            # top_sources = [src for src, count in source_counter.most_common(1)]
+            # sources_line = "🗂️ المراجع: [" + "، ".join(top_sources) + "]"
+            
+            # ✅ NEW: Match response to the most similar summary
+            top_source = find_most_similar_summary(response, summaries)
+            sources_line = f"🗂️ المرجع: [{top_source}]"
+            # ✅ Append source references to the final message
+            final_response = f"{response.strip()}\n\n{sources_line}"
+
+        # ✅ Show the response
         with st.chat_message("assistant"):
-            st.markdown(response)
+            st.markdown(final_response)
 
-        # ✅ Test translation call (for debug)
         with st.spinner("Translating to English..."):
-            translation_result = translate_text(response)
+            translation_result = translate_text(final_response)
             st.markdown(f"📗 English Translation: `{translation_result}`")
 
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        # ✅ Add to chat history
+        st.session_state.messages.append({"role": "assistant", "content": final_response})
 
 else:
     st.info("⬆️ الرجاء رفع ملف PDF لبدء المحادثة.")

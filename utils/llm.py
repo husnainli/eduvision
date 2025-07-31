@@ -38,3 +38,13 @@ def query_llama3(prompt, system_prompt=system_prompt):
             raise ValueError(f"Unexpected API response: {result}")
     except Exception as e:
         return f"❌ Error: {e}"
+
+
+def summarize_text_arabic(text):
+    summary_prompt = (
+        "النص التالي مأخوذ من وثيقة باللغة العربية. رجاءً أنشئ ملخصًا شاملًا ومختصرًا له "
+        "باستخدام اللغة العربية الفصحى فقط، دون أي كلمات أجنبية أو إضافات غير موجودة في النص.\n\n"
+        f"{text}\n\n"
+        "✍️ الملخص:"
+    )
+    return query_llama3(summary_prompt)

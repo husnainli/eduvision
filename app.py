@@ -5,7 +5,6 @@ import re
 from utils.embeddings import chunk_text, embed_chunks, retrieve_similar_chunks
 from utils.llm import query_llama3
 from utils.translate import translate_text
-from utils.jais_llm import query_jais
 
 # -------------------------------
 # 🧼 Arabic Text Cleaning Utility

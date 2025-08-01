@@ -20,7 +20,7 @@ langchain-text-splitters # Used for chunking documents
 # ===========================
 faiss-cpu                # ✅ FAISS: Fast vector similarity search (replacing Chroma)
 sentence-transformers    # Loads HuggingFace embedding models (e.g., multilingual-e5)
-pinecone
+# pinecone
 
 # ===========================
 # 🤖 LLM Integration

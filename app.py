@@ -128,7 +128,7 @@ if uploaded_files:
 
             vs = get_cached_vectorstore(chunks, filename, text_hash)
             short_text = pdf_text[:5000]
-            summary = get_cached_summary(pdf_text, filename, text_hash)
+            summary = get_cached_summary(short_text, filename, text_hash)
 
             vectorstores.append((filename, vs))
             summaries.append((filename, summary))

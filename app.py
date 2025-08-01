@@ -2,6 +2,8 @@ import streamlit as st
 import fitz  # PyMuPDF
 import re
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from utils.embeddings import chunk_text, embed_chunks, retrieve_from_all_vectorstores, find_most_similar_summary
 from utils.llm import query_llama3, summarize_text_arabic
 from utils.translate import translate_text
@@ -10,7 +12,6 @@ from utils.translate import translate_text
 # 🧼 Arabic Text Cleaning Utility
 # -------------------------------
 def clean_arabic_text(text):
-    """Cleans and normalizes Arabic text."""
     diacritics = re.compile(r"[ًٌٍَُِّْٓ]")
     text = re.sub(diacritics, '', text)
     text = re.sub(r"[إأآا]", "ا", text)
@@ -40,7 +41,6 @@ def get_cached_summary(text, filename, text_hash):
 # 📄 PDF Text Extraction
 # -------------------------------
 def extract_text_from_pdf(pdf_file):
-    """Extracts and cleans Arabic text from uploaded PDF."""
     doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
     raw_text = ''.join(page.get_text() for page in doc)
     return clean_arabic_text(raw_text)
@@ -51,7 +51,6 @@ def extract_text_from_pdf(pdf_file):
 st.set_page_config(page_title="📚 EduVision AI", layout="wide")
 st.title("🤖 EduVision AI")
 
-# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -59,57 +58,64 @@ if "messages" not in st.session_state:
 # 📤 PDF Upload
 # -------------------------------
 uploaded_files = st.file_uploader("📤 Upload Arabic PDFs", type=["pdf"], accept_multiple_files=True)
-
 vectorstores = []
 
 if uploaded_files:
     summaries = []
 
-    for pdf_file in uploaded_files:
+    st.info(f"🚀 Processing {len(uploaded_files)} PDF file(s)...")
+
+    # UI container to log progress
+    progress_container = st.container()
+    summary_container = st.container()
+
+    # Function to process a single PDF
+    def process_pdf(pdf_file):
         filename = pdf_file.name
-        st.success(f"✅ {filename} uploaded successfully!")
-
-        # 🔍 Extract and clean text
-        with st.spinner(f"🧼 Extracting and cleaning text from {filename}..."):
-            pdf_text = extract_text_from_pdf(pdf_file)
-
-        # 🔄 Split into chunks
-        with st.spinner(f"🔄 Splitting {filename} into chunks..."):
-            chunks = chunk_text(pdf_text)
-
-        # 🧠 Hash PDF text to cache vector store
+        pdf_text = extract_text_from_pdf(pdf_file)
+        chunks = chunk_text(pdf_text)
         text_hash = compute_text_hash(pdf_text)
+        vs = get_cached_vectorstore(chunks, filename, text_hash)
+        summary = get_cached_summary(pdf_text, filename, text_hash)
+        return (filename, vs, summary)
 
-        # 🧠 Generate and cache embeddings
-        with st.spinner(f"🧠 Embedding text from {filename}..."):
-            vs = get_cached_vectorstore(chunks, filename, text_hash)
-            vectorstores.append((filename, vs))
+    with ThreadPoolExecutor() as executor:
+        futures = {executor.submit(process_pdf, f): f.name for f in uploaded_files}
 
-        # 📝 Generate summary of full text
-        with st.spinner(f"📚 Generating Arabic summary for {filename}..."):
-            summary = get_cached_summary(pdf_text, filename, text_hash)
-            summaries.append((filename, summary))
+        for i, future in enumerate(as_completed(futures), start=1):
+            filename = futures[future]
+            try:
+                filename, vs, summary = future.result()
+                vectorstores.append((filename, vs))
+                summaries.append((filename, summary))
 
-        with st.container():
-            st.markdown(f"### 📝 ملخص الوثيقة: {filename}")
-            st.markdown(
-                f"""
-                <div style='background-color:#f9f9f9;
-                            border-left: 5px solid #4CAF50;
-                            padding: 1rem;
-                            border-radius: 10px;
-                            font-size: 1.1rem;
-                            direction: rtl;
-                            text-align: right;'>
-                    {summary}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+                with progress_container:
+                    st.success(f"✅ {filename} processed ({i}/{len(uploaded_files)})")
 
-    # ---------------------------------
+                with summary_container:
+                    with st.expander(f"📝 ملخص الوثيقة: {filename}", expanded=True):
+                        st.markdown(
+                            f"""
+                            <div style='background-color:#f9f9f9;
+                                        border-left: 5px solid #4CAF50;
+                                        padding: 1rem;
+                                        border-radius: 10px;
+                                        font-size: 1.1rem;
+                                        direction: rtl;
+                                        text-align: right;'>
+                                {summary}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+            except Exception as e:
+                with progress_container:
+                    st.error(f"❌ Failed to process {filename}: {str(e)}")
+
+    # -------------------------------
     # 💬 Interactive Q&A Chat Interface
-    # ---------------------------------
+    # -------------------------------
     st.divider()
     st.subheader("💬 Ask a question based on the uploaded PDFs")
 
@@ -120,12 +126,10 @@ if uploaded_files:
     user_input = st.chat_input("✍️ اكتب سؤالك هنا (باللغة العربية)...")
 
     if user_input:
-        # Show user question
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # Retrieve relevant document chunks
         with st.spinner("🤖 Generating response using LLaMA 3..."):
             retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
 
@@ -142,34 +146,39 @@ if uploaded_files:
                 "إذا لم يكن هناك معلومات كافية، قل ذلك بالعربية فقط دون تأليف."
             )
 
-
             response = query_llama3(prompt)
 
-            # # ✅ Extract unique source filenames
-            # used_sources = set(doc.metadata.get("source", "غير معروف") for doc in retrieved_docs)
-            # sources_line = "🗂️ المراجع: [" + "، ".join(used_sources) + "]"
-
-            # from collections import Counter
-            # source_counter = Counter(doc.metadata.get("source", "غير معروف") for doc in retrieved_docs)
-            # top_sources = [src for src, count in source_counter.most_common(1)]
-            # sources_line = "🗂️ المراجع: [" + "، ".join(top_sources) + "]"
-            
-            # ✅ NEW: Match response to the most similar summary
             top_source = find_most_similar_summary(response, summaries)
             sources_line = f"🗂️ المرجع: [{top_source}]"
-            # ✅ Append source references to the final message
             final_response = f"{response.strip()}\n\n{sources_line}"
 
-        # ✅ Show the response
         with st.chat_message("assistant"):
             st.markdown(final_response)
 
         with st.spinner("Translating to English..."):
             translation_result = translate_text(final_response)
-            st.markdown(f"📗 English Translation: `{translation_result}`")
 
-        # ✅ Add to chat history
+        with st.expander("📖 Show English Translation", expanded=False):
+            st.markdown(
+                f"""
+                <div style='background-color:#e3f2fd;
+                            border-left: 6px solid #1976D2;
+                            padding: 1.2rem;
+                            border-radius: 12px;
+                            font-size: 1.1rem;
+                            direction: ltr;
+                            text-align: left;
+                            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+                            transition: all 0.3s ease;'>
+                    <b>Translation:</b><br><br>
+                    {translation_result}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
         st.session_state.messages.append({"role": "assistant", "content": final_response})
 
 else:
     st.info("⬆️ الرجاء رفع ملف PDF لبدء المحادثة.")
+

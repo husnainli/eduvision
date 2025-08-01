@@ -48,6 +48,14 @@ def retrieve_from_all_vectorstores(vectorstores, query, k_per_doc=3):
             all_matches.append(doc)
     return all_matches
 
+# def find_most_similar_summary(response, summaries, model_name='intfloat/multilingual-e5-base'):
+#     model = SentenceTransformer(model_name)
+#     response_embedding = model.encode(response, convert_to_tensor=True)
+#     summary_embeddings = [emb for (_, _, emb) in summaries]
+#     similarities = util.pytorch_cos_sim(response_embedding, summary_embeddings)[0]
+#     best_match_idx = similarities.argmax().item()
+#     return summaries[best_match_idx][0]
+
 def find_most_similar_summary(response, summaries, model_name='thenlper/gte-small'):
     model = SentenceTransformer(model_name)
     response_embedding = model.encode(response, convert_to_tensor=True)

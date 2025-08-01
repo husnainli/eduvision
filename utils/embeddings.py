@@ -24,16 +24,18 @@ def chunk_text(text, chunk_size=500, overlap=100):
 
 
 def embed_chunks(chunks, filename, text_hash):
-    embedding = get_hf_embedding_model()  # Use cached model
+    embedding = get_hf_embedding_model()
     temp_dir = tempfile.gettempdir()
     index_path = os.path.join(temp_dir, f"faiss_index_{filename}_{text_hash}")
 
+    # Early exit if already cached
+    if os.path.exists(index_path):
+        return FAISS.load_local(index_path, embedding, allow_dangerous_deserialization=True)
+
+    # Only do this if not cached
     texts_with_metadata = [{"page_content": chunk, "metadata": {"source": filename}} for chunk in chunks]
     texts = [item["page_content"] for item in texts_with_metadata]
     metadatas = [item["metadata"] for item in texts_with_metadata]
-
-    if os.path.exists(index_path):
-        return FAISS.load_local(index_path, embedding, allow_dangerous_deserialization=True)
 
     vectorstore = FAISS.from_texts(texts, embedding, metadatas=metadatas)
     vectorstore.save_local(index_path)

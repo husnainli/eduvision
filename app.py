@@ -10,6 +10,7 @@ from utils.translate import translate_text
 
 import psutil
 import os
+import tempfile
 import shutil
 
 # RAM usage
@@ -134,8 +135,15 @@ if uploaded_files:
         filename = pdf_file.name
         try:
             pdf_text = extract_text_from_pdf(pdf_file)
-            chunks = chunk_text(pdf_text)
             text_hash = compute_text_hash(pdf_text)
+            index_path = os.path.join(tempfile.gettempdir(), f"faiss_index_{filename}_{text_hash}")
+
+            # Only chunk if vectorstore doesn't already exist
+            if not os.path.exists(index_path):
+                chunks = chunk_text(pdf_text)
+            else:
+                chunks = []  # dummy value, not used when already cached
+
             vs = get_cached_vectorstore(chunks, filename, text_hash)
             summary = get_cached_summary(pdf_text, filename, text_hash)
 
@@ -144,6 +152,14 @@ if uploaded_files:
 
             with progress_container:
                 st.success(f"✅ {filename} processed ({i}/{len(uploaded_files)})")
+
+            # 🧹 Clean up memory for large objects
+            del pdf_text
+            del chunks
+            del vs
+            del summary
+            import gc
+            gc.collect()
 
         except Exception as e:
             with progress_container:

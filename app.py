@@ -2,7 +2,6 @@ import streamlit as st
 import fitz  # PyMuPDF
 import re
 import hashlib
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.embeddings import chunk_text, embed_chunks, retrieve_from_all_vectorstores, find_most_similar_summary
 from utils.llm import query_llama3, summarize_text_arabic
@@ -10,6 +9,7 @@ from utils.translate import translate_text
 
 import psutil
 import os
+import gc
 import tempfile
 import shutil
 
@@ -48,8 +48,7 @@ def get_cached_vectorstore(chunks, filename, text_hash):
 
 @st.cache_data(show_spinner=False)
 def get_cached_summary(text, filename, text_hash):
-    short_text = text[:3000]
-    return summarize_text_arabic(short_text)
+    return summarize_text_arabic(text)
 
 # -------------------------------
 # 📄 PDF Text Extraction
@@ -145,6 +144,7 @@ if uploaded_files:
                 chunks = []  # dummy value, not used when already cached
 
             vs = get_cached_vectorstore(chunks, filename, text_hash)
+            short_text = pdf_text[:5000]
             summary = get_cached_summary(pdf_text, filename, text_hash)
 
             vectorstores.append((filename, vs))
@@ -158,7 +158,6 @@ if uploaded_files:
             del chunks
             del vs
             del summary
-            import gc
             gc.collect()
 
         except Exception as e:

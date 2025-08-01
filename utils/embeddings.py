@@ -1,9 +1,18 @@
+import streamlit as st
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
 from sentence_transformers import SentenceTransformer, util
 import tempfile
 import os
+
+@st.cache_resource
+def get_hf_embedding_model(model_name='intfloat/multilingual-e5-base'):
+    return HuggingFaceEmbeddings(model_name=model_name)
+
+@st.cache_resource
+def get_sentence_transformer(model_name='thenlper/gte-small'):
+    return SentenceTransformer(model_name)
 
 def chunk_text(text, chunk_size=500, overlap=100):
     splitter = RecursiveCharacterTextSplitter(
@@ -14,10 +23,9 @@ def chunk_text(text, chunk_size=500, overlap=100):
     return splitter.split_text(text)
 
 
-def embed_chunks(chunks, filename, model_name='intfloat/multilingual-e5-base'):
-    embedding = HuggingFaceEmbeddings(model_name=model_name)
+def embed_chunks(chunks, filename):
+    embedding = get_hf_embedding_model()  # Use cached model
     temp_dir = tempfile.gettempdir()
-    # Unique path per PDF file
     index_path = os.path.join(temp_dir, f"faiss_index_{filename}")
 
     texts_with_metadata = [{"page_content": chunk, "metadata": {"source": filename}} for chunk in chunks]
@@ -47,8 +55,8 @@ def retrieve_from_all_vectorstores(vectorstores, query, k_per_doc=3):
     return all_matches
 
 
-def find_most_similar_summary(response, summaries, model_name='thenlper/gte-small'):
-    model = SentenceTransformer(model_name)
+def find_most_similar_summary(response, summaries):
+    model = get_sentence_transformer()  # Use cached model
     response_embedding = model.encode(response, convert_to_tensor=True)
     summary_texts = [s for (_, s) in summaries]
     summary_embeddings = model.encode(summary_texts, convert_to_tensor=True)

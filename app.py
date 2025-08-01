@@ -62,12 +62,13 @@ vectorstores = []
 
 if uploaded_files:
     summaries = []
-
-    st.info(f"🚀 Processing {len(uploaded_files)} PDF file(s)...")
-
+    
     # UI container to log progress
+    processing_status = st.empty()
     progress_container = st.container()
     summary_container = st.container()
+
+    processing_status.info(f"🚀 Processing PDF file(s)...")
 
     # Function to process a single PDF
     def process_pdf(pdf_file):
@@ -113,11 +114,42 @@ if uploaded_files:
                 with progress_container:
                     st.error(f"❌ Failed to process {filename}: {str(e)}")
 
+        processing_status.success("✅ All PDFs processed successfully!")
+
+    
     # -------------------------------
     # 💬 Interactive Q&A Chat Interface
     # -------------------------------
     st.divider()
     st.subheader("💬 Ask a question based on the uploaded PDFs")
+
+    with st.expander("⚙️ Chat Options", expanded=False):
+
+        col1, col2 = st.columns([1.5, 1])
+
+        with col1:
+            st.markdown("<br>", unsafe_allow_html=True)  # spacing
+            if st.button("Clear Chat History", help="Reset the conversation."):
+                st.session_state.messages = []
+                st.rerun()
+        
+        with col2:
+            ask_mode = st.radio(
+                "📌 Select Question Mode:",
+                ["Ask from all PDFs", "Ask from a specific PDF"],
+                horizontal=True,
+                index=0,
+                help="Choose whether to query all uploaded documents or just one."
+            )
+
+            if ask_mode == "Ask from a specific PDF":
+                selected_pdf = st.selectbox(
+                    "📄 Select a PDF to query:",
+                    [name for name, _ in vectorstores],
+                    help="Choose a specific document for your question."
+                )
+                selected_vs = next(vs for name, vs in vectorstores if name == selected_pdf)
+
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
@@ -131,7 +163,11 @@ if uploaded_files:
             st.markdown(user_input)
 
         with st.spinner("🤖 Generating response using LLaMA 3..."):
-            retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
+            # retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
+            if ask_mode == "Ask from all PDFs":
+                retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
+            else:
+                retrieved_docs = retrieve_from_all_vectorstores([(selected_pdf, selected_vs)], user_input, k_per_doc=6)
 
             context = "\n\n".join(
                 f"[من الملف: {doc.metadata.get('source', 'غير معروف')}]\n{doc.page_content}"
@@ -155,27 +191,27 @@ if uploaded_files:
         with st.chat_message("assistant"):
             st.markdown(final_response)
 
-        with st.spinner("Translating to English..."):
-            translation_result = translate_text(final_response)
+            with st.spinner("Translating to English..."):
+                translation_result = translate_text(final_response)
 
-        with st.expander("📖 Show English Translation", expanded=False):
-            st.markdown(
-                f"""
-                <div style='background-color:#e3f2fd;
-                            border-left: 6px solid #1976D2;
-                            padding: 1.2rem;
-                            border-radius: 12px;
-                            font-size: 1.1rem;
-                            direction: ltr;
-                            text-align: left;
-                            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-                            transition: all 0.3s ease;'>
-                    <b>Translation:</b><br><br>
-                    {translation_result}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            with st.expander("📖 Show English Translation", expanded=False):
+                st.markdown(
+                    f"""
+                    <div style='background-color:#e3f2fd;
+                                border-left: 6px solid #1976D2;
+                                padding: 1.2rem;
+                                border-radius: 12px;
+                                font-size: 1.1rem;
+                                direction: ltr;
+                                text-align: left;
+                                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+                                transition: all 0.3s ease;'>
+                        <b>Translation:</b><br><br>
+                        {translation_result}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
         st.session_state.messages.append({"role": "assistant", "content": final_response})
 

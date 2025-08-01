@@ -121,59 +121,54 @@ if uploaded_files:
 
 if uploaded_files:
     summaries = []
-    
+    vectorstores = []
+
     # UI container to log progress
     processing_status = st.empty()
     progress_container = st.container()
     summary_container = st.container()
 
-    processing_status.info(f"🚀 Processing PDF file(s)...")
+    processing_status.info("🚀 Processing PDF file(s)...")
 
-    # Function to process a single PDF
-    def process_pdf(pdf_file):
+    for i, pdf_file in enumerate(uploaded_files, start=1):
         filename = pdf_file.name
-        pdf_text = extract_text_from_pdf(pdf_file)
-        chunks = chunk_text(pdf_text)
-        text_hash = compute_text_hash(pdf_text)
-        vs = get_cached_vectorstore(chunks, filename, text_hash)
-        summary = get_cached_summary(pdf_text, filename, text_hash)
-        return (filename, vs, summary)
+        try:
+            pdf_text = extract_text_from_pdf(pdf_file)
+            chunks = chunk_text(pdf_text)
+            text_hash = compute_text_hash(pdf_text)
+            vs = get_cached_vectorstore(chunks, filename, text_hash)
+            summary = get_cached_summary(pdf_text, filename, text_hash)
 
-    with ThreadPoolExecutor() as executor:
-        futures = {executor.submit(process_pdf, f): f.name for f in uploaded_files}
+            vectorstores.append((filename, vs))
+            summaries.append((filename, summary))
 
-        for i, future in enumerate(as_completed(futures), start=1):
-            filename = futures[future]
-            try:
-                filename, vs, summary = future.result()
-                vectorstores.append((filename, vs))
-                summaries.append((filename, summary))
+            with progress_container:
+                st.success(f"✅ {filename} processed ({i}/{len(uploaded_files)})")
 
-                with progress_container:
-                    st.success(f"✅ {filename} processed ({i}/{len(uploaded_files)})")
+        except Exception as e:
+            with progress_container:
+                st.error(f"❌ Failed to process {filename}: {str(e)}")
 
-                with summary_container:
-                    with st.expander(f"📝 ملخص الوثيقة: {filename}", expanded=True):
-                        st.markdown(
-                            f"""
-                            <div style='background-color:#f9f9f9;
-                                        border-left: 5px solid #4CAF50;
-                                        padding: 1rem;
-                                        border-radius: 10px;
-                                        font-size: 1.1rem;
-                                        direction: rtl;
-                                        text-align: right;'>
-                                {summary}
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
+    processing_status.success("✅ All PDFs processed successfully!")
 
-            except Exception as e:
-                with progress_container:
-                    st.error(f"❌ Failed to process {filename}: {str(e)}")
-
-        processing_status.success("✅ All PDFs processed successfully!")
+    with st.sidebar.expander("🧾 جميع الملخصات", expanded=False):
+        for filename, summary in summaries:
+            st.markdown(
+                f"""
+                <div style='background-color:#f0f0f0;
+                            border-left: 4px solid #1E90FF;
+                            padding: 0.7rem;
+                            margin-bottom: 1rem;
+                            border-radius: 8px;
+                            font-size: 0.95rem;
+                            direction: rtl;
+                            text-align: right;'>
+                    <b>{filename}</b><br><br>
+                    {summary}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
     
     # -------------------------------

@@ -7,19 +7,9 @@ from utils.embeddings import chunk_text, embed_chunks, retrieve_from_all_vectors
 from utils.llm import query_llama3, summarize_text_arabic
 from utils.translate import translate_text
 
-import psutil
 import os
 import gc
 import tempfile
-import shutil
-
-# RAM usage
-process = psutil.Process(os.getpid())
-ram_usage = process.memory_info().rss / (1024 * 1024)  # in MB
-
-# Disk usage
-total, used, free = shutil.disk_usage("/")
-disk_used_mb = used / (1024 * 1024)  # in MB
 
 
 # -------------------------------
@@ -63,13 +53,6 @@ def extract_text_from_pdf(pdf_file):
 # -------------------------------
 st.set_page_config(page_title="📚 EduVision AI", layout="wide")
 st.title("🤖 EduVision AI")
-
-# Sidebar display
-with st.sidebar:
-    st.markdown("### 🧠 Resource Monitor")
-    st.markdown(f"**RAM Usage:** {ram_usage:.2f} MB")
-    st.markdown(f"**Disk Usage:** {disk_used_mb:.2f} MB")
-    st.markdown("---")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -166,24 +149,27 @@ if uploaded_files:
 
     processing_status.success("✅ All PDFs processed successfully!")
 
-    with st.sidebar.expander("🧾 جميع الملخصات", expanded=False):
-        for filename, summary in summaries:
-            st.markdown(
-                f"""
-                <div style='background-color:#f0f0f0;
-                            border-left: 4px solid #1E90FF;
-                            padding: 0.7rem;
-                            margin-bottom: 1rem;
-                            border-radius: 8px;
-                            font-size: 0.95rem;
-                            direction: rtl;
-                            text-align: right;'>
-                    <b>{filename}</b><br><br>
-                    {summary}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+    st.subheader("🧾 ملخصات الملفات المرفوعة")
+
+    for filename, summary in summaries:
+        st.markdown(
+            f"""
+            <div style='background-color:#f9f9f9;
+                        border-left: 5px solid #1E90FF;
+                        padding: 1rem;
+                        margin-bottom: 1rem;
+                        border-radius: 10px;
+                        font-size: 1rem;
+                        direction: rtl;
+                        text-align: right;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.05);'>
+                <b>{filename}</b><br><br>
+                {summary}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
 
     
     # -------------------------------

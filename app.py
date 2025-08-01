@@ -57,8 +57,47 @@ if "messages" not in st.session_state:
 # -------------------------------
 # 📤 PDF Upload
 # -------------------------------
-uploaded_files = st.file_uploader("📤 Upload Arabic PDFs", type=["pdf"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("📤 Upload up to 3 Arabic PDFs (Max 5MB each)", type=["pdf"], accept_multiple_files=True)
 vectorstores = []
+
+# ✅ Enforce limits on number, size, and duplicates
+if uploaded_files:
+    # Limit number of files to 3
+    if len(uploaded_files) > 3:
+        st.warning("⚠️ You can upload a maximum of 3 PDF files at a time.")
+        uploaded_files = uploaded_files[:3]  # Only take the first 3
+
+    valid_files = []
+    seen_hashes = set()
+    seen_names = set()
+
+    for f in uploaded_files:
+        file_size_mb = f.size / (1024 * 1024)
+
+        # Compute file hash (for exact duplicate detection)
+        file_bytes = f.read()
+        file_hash = hashlib.md5(file_bytes).hexdigest()
+        f.seek(0)  # Reset file pointer after reading
+
+        if f.name in seen_names:
+            st.warning(f"⚠️ Duplicate file name detected: {f.name}")
+            continue
+        if file_hash in seen_hashes:
+            st.warning(f"⚠️ Duplicate file content detected: {f.name}")
+            continue
+        if file_size_mb > 5:
+            st.warning(f"❌ {f.name} is too large ({file_size_mb:.2f} MB). Max allowed: 5 MB.")
+            continue
+
+        # Passed all checks
+        valid_files.append(f)
+        seen_hashes.add(file_hash)
+        seen_names.add(f.name)
+
+    if not valid_files:
+        st.stop()
+
+    uploaded_files = valid_files  # Only valid, unique, small files
 
 if uploaded_files:
     summaries = []

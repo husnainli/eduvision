@@ -145,8 +145,7 @@ if uploaded_files:
             filename = futures[future]
             try:
                 filename, vs, summary = future.result()
-                # vectorstores.append((filename, vs))
-                vectorstores.append((filename, filename))
+                vectorstores.append((filename, vs))
                 summaries.append((filename, summary))
 
                 with progress_container:

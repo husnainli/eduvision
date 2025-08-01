@@ -20,6 +20,23 @@ ram_usage = process.memory_info().rss / (1024 * 1024)  # in MB
 total, used, free = shutil.disk_usage("/")
 disk_used_mb = used / (1024 * 1024)  # in MB
 
+import tempfile
+
+def clear_faiss_on_reload():
+    temp_dir = tempfile.gettempdir()
+    for item in os.listdir(temp_dir):
+        if item.startswith("faiss_index_"):
+            path = os.path.join(temp_dir, item)
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                elif os.path.isfile(path):
+                    os.remove(path)
+            except:
+                pass
+
+clear_faiss_on_reload()
+
 # -------------------------------
 # 🧼 Arabic Text Cleaning Utility
 # -------------------------------

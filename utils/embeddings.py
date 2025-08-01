@@ -23,10 +23,10 @@ def chunk_text(text, chunk_size=500, overlap=100):
     return splitter.split_text(text)
 
 
-def embed_chunks(chunks, filename):
+def embed_chunks(chunks, filename, text_hash):
     embedding = get_hf_embedding_model()  # Use cached model
     temp_dir = tempfile.gettempdir()
-    index_path = os.path.join(temp_dir, f"faiss_index_{filename}")
+    index_path = os.path.join(temp_dir, f"faiss_index_{filename}_{text_hash}")
 
     texts_with_metadata = [{"page_content": chunk, "metadata": {"source": filename}} for chunk in chunks]
     texts = [item["page_content"] for item in texts_with_metadata]

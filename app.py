@@ -43,7 +43,7 @@ def compute_text_hash(text):
 
 @st.cache_resource
 def get_cached_vectorstore(chunks, filename, text_hash):
-    return embed_chunks(chunks, filename=filename)
+    return embed_chunks(chunks, filename=filename, text_hash=text_hash)
 
 @st.cache_data(show_spinner=False)
 def get_cached_summary(text, filename, text_hash):

@@ -8,18 +8,6 @@ from utils.embeddings import chunk_text, embed_chunks, retrieve_from_all_vectors
 from utils.llm import query_llama3, summarize_text_arabic
 from utils.translate import translate_text
 
-import psutil
-import os
-import shutil
-
-# RAM usage
-process = psutil.Process(os.getpid())
-ram_usage = process.memory_info().rss / (1024 * 1024)  # in MB
-
-# Disk usage
-total, used, free = shutil.disk_usage("/")
-disk_used_mb = used / (1024 * 1024)  # in MB
-
 # -------------------------------
 # 🧼 Arabic Text Cleaning Utility
 # -------------------------------
@@ -62,13 +50,6 @@ def extract_text_from_pdf(pdf_file):
 # -------------------------------
 st.set_page_config(page_title="📚 EduVision AI", layout="wide")
 st.title("🤖 EduVision AI")
-
-# Sidebar display
-with st.sidebar:
-    st.markdown("### 🧠 Resource Monitor")
-    st.markdown(f"**RAM Usage:** {ram_usage:.2f} MB")
-    st.markdown(f"**Disk Usage:** {disk_used_mb:.2f} MB")
-    st.markdown("---")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []

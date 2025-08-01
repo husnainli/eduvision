@@ -35,3 +35,6 @@ googletrans==4.0.0-rc1   # Google Translate (via unofficial API)
 # ⚙️ Compatibility Fixes
 # ===========================
 pydantic<2.0             # Required by some LangChain modules (pre-2.x)
+
+
+psutil

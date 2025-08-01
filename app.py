@@ -293,6 +293,16 @@ from utils.clean import clean_arabic_text
 import tempfile
 import pickle
 
+import psutil
+
+# RAM usage
+process = psutil.Process(os.getpid())
+ram_usage = process.memory_info().rss / (1024 * 1024)  # in MB
+
+# Disk usage
+total, used, free = shutil.disk_usage("/")
+disk_used_mb = used / (1024 * 1024)  # in MB
+
 # -------------------------------
 # 📁 Temporary directory paths
 # -------------------------------
@@ -401,6 +411,13 @@ for file_id, summary in st.session_state.summaries:
 # -------------------------------
 # 🧼 Cleanup on Refresh
 # -------------------------------
+
+# Sidebar display
+with st.sidebar:
+    st.markdown("### 🧠 Resource Monitor")
+    st.markdown(f"**RAM Usage:** {ram_usage:.2f} MB")
+    st.markdown(f"**Disk Usage:** {disk_used_mb:.2f} MB")
+    st.markdown("---")
 if st.sidebar.button("♻️ Clear All Session Data"):
     st.session_state.vectorstores.clear()
     st.session_state.summaries.clear()

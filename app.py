@@ -43,16 +43,57 @@ def get_cached_summary(text, filename, text_hash):
 # -------------------------------
 # 📄 PDF Text Extraction
 # -------------------------------
-def extract_text_from_pdf(pdf_file):
+def extract_text_and_metadata(pdf_file):
     doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
-    raw_text = ''.join(page.get_text() for page in doc)
-    return clean_arabic_text(raw_text)
+    raw_text = ''
+    for page in doc:
+        raw_text += page.get_text()
+    cleaned_text = clean_arabic_text(raw_text)
+    metadata = {
+        "page_count": len(doc),
+        "word_count": len(cleaned_text.split()),
+        "char_count": len(cleaned_text),
+    }
+    return cleaned_text, metadata
+
 
 # -------------------------------
 # 🚀 Streamlit App Initialization
 # -------------------------------
 st.set_page_config(page_title="📚 EduVision AI", layout="wide")
-st.title("🤖 EduVision AI")
+st.markdown("""
+    <style>
+        .sticky-header {
+            position: fixed;
+            top: 2%;
+            left: calc(1.5rem + var(--sidebar-width, 0px));  /* align with content */
+            right: 2%;
+            background-color: white;
+            z-index: 1000;
+            padding: 1.0rem 2rem 1rem 2rem;
+            text-align: right;
+            width: auto;
+            box-shadow: 0 0px 0px rgba(0, 0, 0, 0.0);
+        }
+
+        /* Prevent content overlap */
+        .main > div:first-child {
+            margin-top: 100px;
+        }
+
+        /* Optional: make page fully RTL-compatible */
+        .main {
+            direction: rtl;
+        }
+    </style>
+
+    <div class="sticky-header">
+        <h1 style="color: #1E88E5; margin: 0; font-size: 2.2rem;">✨ EduVision AI</h1>
+        <p style="color: #555; font-size: 1.1rem; margin-top: 0.4rem;">
+            حمّل مستنداتك العربية واحصل على ملخصات ذكية وإجابات دقيقة مع الإشارة إلى المصادر.
+        </p>
+    </div>
+""", unsafe_allow_html=True)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -60,7 +101,22 @@ if "messages" not in st.session_state:
 # -------------------------------
 # 📤 PDF Upload
 # -------------------------------
-uploaded_files = st.file_uploader("📤 Upload up to 3 Arabic PDFs (Max 5MB each)", type=["pdf"], accept_multiple_files=True)
+
+# Horizontal lines
+st.markdown("""
+    <div style='margin-top: 2rem; margin-bottom: 1.5rem;'>
+        <hr style='border: none; height: 1px; background-color: #ddd;' />
+    </div>
+""", unsafe_allow_html=True)
+
+# Custom bold & larger label
+st.markdown("""
+<div style='font-size: 1.2rem; font-weight: bold; margin-bottom: 0.3rem;'>
+    📤 Upload up to 3 Arabic PDFs (Max 5MB each)
+</div>
+""", unsafe_allow_html=True)
+
+uploaded_files = st.file_uploader("", type=["pdf"], accept_multiple_files=True)
 vectorstores = []
 
 # ✅ Enforce limits on number, size, and duplicates
@@ -98,6 +154,7 @@ if uploaded_files:
         seen_names.add(f.name)
 
     if not valid_files:
+        st.error("🚫 No valid files were uploaded. Please try again.")
         st.stop()
 
     uploaded_files = valid_files  # Only valid, unique, small files
@@ -111,12 +168,15 @@ if uploaded_files:
     progress_container = st.container()
     summary_container = st.container()
 
-    processing_status.info("🚀 Processing PDF file(s)...")
+    processing_status.info(f"🚀 Processing PDF file(s)...")
+
+    st.sidebar.header("📊 PDF Statistics")
+    stats_container = st.sidebar.container()
 
     for i, pdf_file in enumerate(uploaded_files, start=1):
         filename = pdf_file.name
         try:
-            pdf_text = extract_text_from_pdf(pdf_file)
+            pdf_text, metadata = extract_text_and_metadata(pdf_file)
             text_hash = compute_text_hash(pdf_text)
             index_path = os.path.join(tempfile.gettempdir(), f"faiss_index_{filename}_{text_hash}")
 
@@ -133,6 +193,16 @@ if uploaded_files:
             vectorstores.append((filename, vs))
             summaries.append((filename, summary))
 
+            # Update sidebar stats
+            stats_container.markdown(f"""
+            <div style='border-bottom: 1px solid #ddd; margin-bottom: 1rem; padding-bottom: 0.5rem;'>
+                <b>{filename}</b><br>
+                🧾 Pages: {metadata['page_count']}<br>
+                📝 Words: {metadata['word_count']}<br>
+                🔤 Characters: {metadata['char_count']}<br>
+            </div>
+            """, unsafe_allow_html=True)
+
             with progress_container:
                 st.success(f"✅ {filename} processed ({i}/{len(uploaded_files)})")
 
@@ -144,31 +214,29 @@ if uploaded_files:
             gc.collect()
 
         except Exception as e:
-            with progress_container:
-                st.error(f"❌ Failed to process {filename}: {str(e)}")
+            st.error(f"❌ Failed to process **{filename}**: {str(e)}")
 
     processing_status.success("✅ All PDFs processed successfully!")
 
-    st.subheader("🧾 ملخصات الملفات المرفوعة")
+
+    st.subheader("📝 ملخصات الملفات المرفوعة")
 
     for filename, summary in summaries:
-        st.markdown(
-            f"""
-            <div style='background-color:#f9f9f9;
-                        border-left: 5px solid #1E90FF;
-                        padding: 1rem;
-                        margin-bottom: 1rem;
-                        border-radius: 10px;
-                        font-size: 1rem;
-                        direction: rtl;
-                        text-align: right;
-                        box-shadow: 0 2px 6px rgba(0,0,0,0.05);'>
-                <b>{filename}</b><br><br>
-                {summary}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        with st.expander(f"ملخص الوثيقة: {filename}", expanded=False):
+            st.markdown(
+                f"""
+                <div style='background-color:#f9f9f9;
+                            border-left: 5px solid #4CAF50;
+                            padding: 1rem;
+                            border-radius: 10px;
+                            font-size: 1.1rem;
+                            direction: rtl;
+                            text-align: right;'>
+                    {summary}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
 
     

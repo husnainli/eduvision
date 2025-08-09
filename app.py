@@ -218,125 +218,128 @@ if uploaded_files:
 
     processing_status.success("✅ All PDFs processed successfully!")
 
+    # ✅ Create two tabs: one for summaries, one for Q&A
+    tab_qa, tab_summaries = st.tabs(["💬 Q&A Chat", "📄 Summaries"])
 
-    st.subheader("📝 ملخصات الملفات المرفوعة")
+    with tab_summaries:
+        st.subheader("📝 ملخصات الملفات المرفوعة")
 
-    for filename, summary in summaries:
-        with st.expander(f"ملخص الوثيقة: {filename}", expanded=False):
-            st.markdown(
-                f"""
-                <div style='background-color:#f9f9f9;
-                            border-left: 5px solid #4CAF50;
-                            padding: 1rem;
-                            border-radius: 10px;
-                            font-size: 1.1rem;
-                            direction: rtl;
-                            text-align: right;'>
-                    {summary}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-
-    
-    # -------------------------------
-    # 💬 Interactive Q&A Chat Interface
-    # -------------------------------
-    st.divider()
-    st.subheader("💬 Ask a question based on the uploaded PDFs")
-
-    with st.expander("⚙️ Chat Options", expanded=False):
-
-        col1, col2 = st.columns([1.5, 1])
-
-        with col1:
-            st.markdown("<br>", unsafe_allow_html=True)  # spacing
-            if st.button("Clear Chat History", help="Reset the conversation."):
-                st.session_state.messages = []
-                st.rerun()
-        
-        with col2:
-            ask_mode = st.radio(
-                "📌 Select Question Mode:",
-                ["Ask from all PDFs", "Ask from a specific PDF"],
-                horizontal=True,
-                index=0,
-                help="Choose whether to query all uploaded documents or just one."
-            )
-
-            if ask_mode == "Ask from a specific PDF":
-                selected_pdf = st.selectbox(
-                    "📄 Select a PDF to query:",
-                    [name for name, _ in vectorstores],
-                    help="Choose a specific document for your question."
-                )
-                selected_vs = next(vs for name, vs in vectorstores if name == selected_pdf)
-
-
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    user_input = st.chat_input("✍️ اكتب سؤالك هنا (باللغة العربية)...")
-
-    if user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
-
-        with st.spinner("🤖 Generating response using LLaMA 3..."):
-            # retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
-            if ask_mode == "Ask from all PDFs":
-                retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
-            else:
-                retrieved_docs = retrieve_from_all_vectorstores([(selected_pdf, selected_vs)], user_input, k_per_doc=6)
-
-            context = "\n\n".join(
-                f"[من الملف: {doc.metadata.get('source', 'غير معروف')}]\n{doc.page_content}"
-                for doc in retrieved_docs
-            )
-
-            prompt = (
-                f"السؤال:\n{user_input}\n\n"
-                f"محتوى الوثائق:\n{context}\n\n"
-                "أجب إجابة كاملة وشاملة مستندًا فقط إلى محتوى الوثائق أعلاه.\n"
-                "يجب أن تكون إجابتك باللغة العربية الفصحى فقط دون أي كلمات إنجليزية أو لغات أخرى.\n"
-                "إذا لم يكن هناك معلومات كافية، قل ذلك بالعربية فقط دون تأليف."
-            )
-
-            response = query_llama3(prompt)
-
-            top_source = find_most_similar_summary(response, summaries)
-            sources_line = f"🗂️ المرجع: [{top_source}]"
-            final_response = f"{response.strip()}\n\n{sources_line}"
-
-        with st.chat_message("assistant"):
-            st.markdown(final_response)
-
-            with st.spinner("Translating to English..."):
-                translation_result = translate_text(final_response)
-
-            with st.expander("📖 Show English Translation", expanded=False):
+        for filename, summary in summaries:
+            with st.expander(f"ملخص الوثيقة: {filename}", expanded=False):
                 st.markdown(
                     f"""
-                    <div style='background-color:#e3f2fd;
-                                border-left: 6px solid #1976D2;
-                                padding: 1.2rem;
-                                border-radius: 12px;
+                    <div style='background-color:#f9f9f9;
+                                border-left: 5px solid #4CAF50;
+                                padding: 1rem;
+                                border-radius: 10px;
                                 font-size: 1.1rem;
-                                direction: ltr;
-                                text-align: left;
-                                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-                                transition: all 0.3s ease;'>
-                        <b>Translation:</b><br><br>
-                        {translation_result}
+                                direction: rtl;
+                                text-align: right;'>
+                        {summary}
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
-        st.session_state.messages.append({"role": "assistant", "content": final_response})
+
+    with tab_qa:
+        # -------------------------------
+        # 💬 Interactive Q&A Chat Interface
+        # -------------------------------
+        st.divider()
+        st.subheader("💬 Ask a question based on the uploaded PDFs")
+
+        with st.expander("⚙️ Chat Options", expanded=False):
+
+            col1, col2 = st.columns([1.5, 1])
+
+            with col1:
+                st.markdown("<br>", unsafe_allow_html=True)  # spacing
+                if st.button("Clear Chat History", help="Reset the conversation."):
+                    st.session_state.messages = []
+                    st.rerun()
+            
+            with col2:
+                ask_mode = st.radio(
+                    "📌 Select Question Mode:",
+                    ["Ask from all PDFs", "Ask from a specific PDF"],
+                    horizontal=True,
+                    index=0,
+                    help="Choose whether to query all uploaded documents or just one."
+                )
+
+                if ask_mode == "Ask from a specific PDF":
+                    selected_pdf = st.selectbox(
+                        "📄 Select a PDF to query:",
+                        [name for name, _ in vectorstores],
+                        help="Choose a specific document for your question."
+                    )
+                    selected_vs = next(vs for name, vs in vectorstores if name == selected_pdf)
+
+
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        user_input = st.chat_input("✍️ اكتب سؤالك هنا (باللغة العربية)...")
+
+        if user_input:
+            st.session_state.messages.append({"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.markdown(user_input)
+
+            with st.spinner("🤖 Generating response using LLaMA 3..."):
+                # retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
+                if ask_mode == "Ask from all PDFs":
+                    retrieved_docs = retrieve_from_all_vectorstores(vectorstores, user_input, k_per_doc=4)
+                else:
+                    retrieved_docs = retrieve_from_all_vectorstores([(selected_pdf, selected_vs)], user_input, k_per_doc=6)
+
+                context = "\n\n".join(
+                    f"[من الملف: {doc.metadata.get('source', 'غير معروف')}]\n{doc.page_content}"
+                    for doc in retrieved_docs
+                )
+
+                prompt = (
+                    f"السؤال:\n{user_input}\n\n"
+                    f"محتوى الوثائق:\n{context}\n\n"
+                    "أجب إجابة كاملة وشاملة مستندًا فقط إلى محتوى الوثائق أعلاه.\n"
+                    "يجب أن تكون إجابتك باللغة العربية الفصحى فقط دون أي كلمات إنجليزية أو لغات أخرى.\n"
+                    "إذا لم يكن هناك معلومات كافية، قل ذلك بالعربية فقط دون تأليف."
+                )
+
+                response = query_llama3(prompt)
+
+                top_source = find_most_similar_summary(response, summaries)
+                sources_line = f"🗂️ المرجع: [{top_source}]"
+                final_response = f"{response.strip()}\n\n{sources_line}"
+
+            with st.chat_message("assistant"):
+                st.markdown(final_response)
+
+                with st.spinner("Translating to English..."):
+                    translation_result = translate_text(final_response)
+
+                with st.expander("📖 Show English Translation", expanded=False):
+                    st.markdown(
+                        f"""
+                        <div style='background-color:#e3f2fd;
+                                    border-left: 6px solid #1976D2;
+                                    padding: 1.2rem;
+                                    border-radius: 12px;
+                                    font-size: 1.1rem;
+                                    direction: ltr;
+                                    text-align: left;
+                                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+                                    transition: all 0.3s ease;'>
+                            <b>Translation:</b><br><br>
+                            {translation_result}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+            st.session_state.messages.append({"role": "assistant", "content": final_response})
 
 else:
     st.info("⬆️ الرجاء رفع ملف PDF لبدء المحادثة.")
